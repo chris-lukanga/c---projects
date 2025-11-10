@@ -1,7 +1,7 @@
 cls
 cd /d "%~dp0"
 
-g++ main.cpp -Iinclude -Llib ^
+g++ main.cpp src/glad.c -Iinclude -Llib ^
     -lglfw3 -lopengl32 -lgdi32 -luser32 -lkernel32 -o app.exe
 
 echo.
