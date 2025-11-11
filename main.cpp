@@ -8,6 +8,11 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
+void processInput(GLFWwindow* window) {
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+}
+
 int main() {
     std::srand(static_cast<unsigned int>(std::time(0)));
     int width = 800;
@@ -46,6 +51,9 @@ int main() {
     unsigned  int VAO, VBO;
 
     while(!glfwWindowShouldClose(window)){
+        processInput(window);
+
+        
         glClearColor(0.0f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glfwSwapBuffers(window);
