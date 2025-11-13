@@ -18,27 +18,25 @@ void processInput(GLFWwindow* window) {
 }
 
 std::string readFileToString(const std::string& filePath) {
-    // Open file in binary mode to avoid unwanted conversions
-    std::ifstream fileStream(filePath, std::ios::in | std::ios::binary);
-    if (!fileStream.is_open()) {
-        std::cerr << "Failed to open file: " << filePath << std::endl;
+    std::ifstream shaderFile(filePath, std::ios::binary);
+        if (!shaderFile.is_open()) {
+        std::cerr << "Failed to open shader file: " << filePath << std::endl;
         return "";
     }
 
-    std::ostringstream contentStream;
-    contentStream << fileStream.rdbuf();
-    std::string content = contentStream.str();
+    std::stringstream buffer;
+    buffer << shaderFile.rdbuf();
+    std::string shaderCode = buffer.str();
 
-    // Optionally remove UTF-8 BOM if present
-    if (content.size() >= 3 &&
-        static_cast<unsigned char>(content[0]) == 0xEF &&
-        static_cast<unsigned char>(content[1]) == 0xBB &&
-        static_cast<unsigned char>(content[2]) == 0xBF)
-    {
-        content.erase(0, 3);
+    // --- FIX: Remove UTF-8 BOM if present ---
+    if (shaderCode.size() >= 3 &&
+        static_cast<unsigned char>(shaderCode[0]) == 0xEF &&
+        static_cast<unsigned char>(shaderCode[1]) == 0xBB &&
+        static_cast<unsigned char>(shaderCode[2]) == 0xBF) {
+        shaderCode.erase(0, 3);
     }
 
-    return content;
+    return shaderCode;
 }
 
 void checkCompileErrors(unsigned int shader, const std::string& type) {
@@ -46,6 +44,7 @@ void checkCompileErrors(unsigned int shader, const std::string& type) {
     char infoLog[1024];
     if (type != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        
         if (!success) {
             glGetShaderInfoLog(shader, 1024, nullptr, infoLog);
             std::cerr << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
@@ -114,18 +113,21 @@ int main() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    const char* vertexShaderSource = readFileToString("shaders/vertexShader.glsl").c_str();
-    const char* fragmentShaderSource = readFileToString("shaders/fragmentShader.glsl").c_str();
+    std::string vertexShaderSource = readFileToString("shaders/vertexShader.glsl");
+    std::string fragmentShaderSource = readFileToString("shaders/fragmentShader.glsl");
+    
+    const char* vertexShaderSourcePtr = vertexShaderSource.c_str();
+    const char* fragmentShaderSourcePtr = fragmentShaderSource.c_str();
 
     unsigned int vertexShader;
     vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
+    glShaderSource(vertexShader, 1, &vertexShaderSourcePtr, nullptr);
     glCompileShader(vertexShader);
     checkCompileErrors(vertexShader, "VERTEX");
 
     unsigned int fragmentShader;
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSourcePtr, nullptr);
     glCompileShader(fragmentShader);
     checkCompileErrors(fragmentShader, "FRAGMENT");
 
@@ -138,9 +140,13 @@ int main() {
     glUseProgram(shaderProgram);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glEnableVertexAttribArray(0);
+    
+    // Color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 
 
 
