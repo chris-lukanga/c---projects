@@ -7,6 +7,8 @@
 #include <sstream>
 #include <string>
 #include <cmath>
+#include "shader.h"
+#include "stb_image.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
@@ -17,46 +19,9 @@ void processInput(GLFWwindow* window) {
         glfwSetWindowShouldClose(window, true);
 }
 
-std::string readFileToString(const std::string& filePath) {
-    std::ifstream shaderFile(filePath, std::ios::binary);
-        if (!shaderFile.is_open()) {
-        std::cerr << "Failed to open shader file: " << filePath << std::endl;
-        return "";
-    }
 
-    std::stringstream buffer;
-    buffer << shaderFile.rdbuf();
-    std::string shaderCode = buffer.str();
 
-    // --- FIX: Remove UTF-8 BOM if present ---
-    if (shaderCode.size() >= 3 &&
-        static_cast<unsigned char>(shaderCode[0]) == 0xEF &&
-        static_cast<unsigned char>(shaderCode[1]) == 0xBB &&
-        static_cast<unsigned char>(shaderCode[2]) == 0xBF) {
-        shaderCode.erase(0, 3);
-    }
 
-    return shaderCode;
-}
-
-void checkCompileErrors(unsigned int shader, const std::string& type) {
-    int success;
-    char infoLog[1024];
-    if (type != "PROGRAM") {
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-        
-        if (!success) {
-            glGetShaderInfoLog(shader, 1024, nullptr, infoLog);
-            std::cerr << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
-        }
-    } else {
-        glGetProgramiv(shader, GL_LINK_STATUS, &success);
-        if (!success) {
-            glGetProgramInfoLog(shader, 1024, nullptr, infoLog);
-            std::cerr << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
-        }
-    }
-}
 
 int main() {
     std::srand(static_cast<unsigned int>(std::time(0)));
@@ -86,17 +51,39 @@ int main() {
     glViewport(0, 0, width, height);
 
     float vertices[] = {
-        // positions         // colors
-         0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top right
-         0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f,  1.0f, 1.0f, 0.0f   // top left 
+        // positions         // colors          // texture coords
+         0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  1.0f, 1.0f, // top right
+         0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  1.0f, 0.0f,// bottom right
+        -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,// bottom left
+        -0.5f,  0.5f, 0.0f,  1.0f, 1.0f, 0.0f,  0.0f, 1.0f// top left 
     };
 
     unsigned int indices[] = {  
         0, 1, 3,   // first triangle
         1, 2, 3    // second triangle
     };
+
+    int texWidth, texHeight, nrChannels;
+    unsigned char *data = stbi_load("texture/random.jpg", &texWidth, &texHeight, &nrChannels, 0);
+    if(!data){
+        std::cerr << "Failed to load texture" << std::endl;
+        exit(-1);
+    }
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texWidth, texHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     unsigned  int VAO, VBO, EBO;
 
@@ -113,38 +100,18 @@ int main() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    std::string vertexShaderSource = readFileToString("shaders/vertexShader.glsl");
-    std::string fragmentShaderSource = readFileToString("shaders/fragmentShader.glsl");
+    Shader shaderProgram("shaders/vertexShader.glsl", "shaders/fragmentShader.glsl");
     
-    const char* vertexShaderSourcePtr = vertexShaderSource.c_str();
-    const char* fragmentShaderSourcePtr = fragmentShaderSource.c_str();
 
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSourcePtr, nullptr);
-    glCompileShader(vertexShader);
-    checkCompileErrors(vertexShader, "VERTEX");
-
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSourcePtr, nullptr);
-    glCompileShader(fragmentShader);
-    checkCompileErrors(fragmentShader, "FRAGMENT");
-
-    unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    checkCompileErrors(shaderProgram, "PROGRAM");
-    glUseProgram(shaderProgram);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
     // Color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 
@@ -155,12 +122,8 @@ int main() {
         glClearColor(0.0f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        unsigned int colorLocation = glGetUniformLocation(shaderProgram, "ourColor");
-        float timeValue = static_cast<float>(glfwGetTime());
-        float greenValue = (std::sin(timeValue) / 2.0f) + 0.5f;
-        glUniform4f(colorLocation, 0.0f, greenValue, 0.0f, 1.0f);
-
-        glUseProgram(shaderProgram);
+        shaderProgram.use();
+        glBindTexture(GL_TEXTURE_2D, texture);
         glBindVertexArray(VAO);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -169,12 +132,11 @@ int main() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
     glfwTerminate();
 
-    std::cout<<readFileToString("shaders/fragmentShader.glsl").c_str()<<std::endl;
+
     
     return 0;
 }
